@@ -87,17 +87,28 @@ class NQueensVisualizer:
         """Vẽ quân hậu tại vị trí (row, col)"""
         if self.queen_image is not None:
             # Sử dụng ảnh queen.png
-            # Tạo OffsetImage từ ảnh queen
-            imagebox = OffsetImage(self.queen_image, zoom=0.8/self.num_queens)
+            # Tính toán zoom để ảnh vừa khít trong ô (90% kích thước ô)
+            cell_size = 1.0  # Kích thước mỗi ô là 1x1
+            target_size = cell_size * 0.9  # Sử dụng 90% kích thước ô
+            
+            # Lấy kích thước gốc của ảnh
+            img_height, img_width = self.queen_image.shape[:2]
+            
+            # Tính zoom factor dựa trên kích thước lớn nhất (chiều cao hoặc chiều rộng)
+            max_img_dimension = max(img_height, img_width)
+            zoom_factor = target_size / (max_img_dimension / 100)  # Điều chỉnh tỷ lệ
+            
+            # Tạo OffsetImage từ ảnh queen với zoom chính xác
+            imagebox = OffsetImage(self.queen_image, zoom=zoom_factor)
             
             # Tạo AnnotationBbox để đặt ảnh tại vị trí chỉ định
             ab = AnnotationBbox(imagebox, (col + 0.5, self.num_queens - 1 - row + 0.5), 
-                               frameon=False, pad=0)
+                               frameon=False, pad=0, box_alignment=(0.5, 0.5))
             
             # Thêm màu nền nếu cần (để phân biệt các trạng thái khác nhau)
             if color != 'blue':  # blue là màu mặc định cho quân hậu đã đặt
                 circle = patches.Circle((col + 0.5, self.num_queens - 1 - row + 0.5), 
-                                       0.4, facecolor=color, alpha=0.3, edgecolor=color, linewidth=2)
+                                       0.45, facecolor=color, alpha=0.2, edgecolor=color, linewidth=2)
                 self.ax.add_patch(circle)
                 self.queen_patches.append(circle)
             
@@ -271,27 +282,6 @@ def export_solution_steps(num_queens):
         return False
 
 def search_visualized(state, solutions, num_queens, visualizer, max_solutions=1):
-    """Tìm kiếm với visualization"""
-    if is_valid_state(state, num_queens):
-        solutions.append(state.copy())
-        visualizer.show_step(state, "solution")
-        return len(solutions) >= max_solutions  # Dừng sau khi tìm đủ số lời giải
-    
-    for candidate in get_candidates(state, num_queens):
-        # Hiển thị bước đang thử
-        visualizer.show_step(state, "trying", candidate)
-        
-        state.append(candidate)
-        
-        # Đệ quy và kiểm tra nếu cần dừng
-        if search_visualized(state, solutions, num_queens, visualizer, max_solutions):
-            return True
-        
-        # Quay lui
-        state.pop()
-        visualizer.show_step(state, "backtrack")
-    
-    return False
     """Tìm kiếm với visualization"""
     if is_valid_state(state, num_queens):
         solutions.append(state.copy())
