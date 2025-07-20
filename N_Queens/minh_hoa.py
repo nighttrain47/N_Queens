@@ -11,7 +11,7 @@ class NQueensVisualizer:
     def __init__(self, num_queens=4, export_mode=False):
         self.num_queens = num_queens
         self.export_mode = export_mode
-        self.fig, self.ax = plt.subplots(figsize=(8, 8))
+        self.fig, self.ax = plt.subplots(figsize=(10, 8))
         self.board_patches = []
         self.queen_patches = []
         self.attack_patches = []
@@ -87,16 +87,27 @@ class NQueensVisualizer:
         """Vẽ quân hậu tại vị trí (row, col)"""
         if self.queen_image is not None:
             # Sử dụng ảnh queen.png
-            # Tính toán zoom để ảnh vừa khít trong ô (90% kích thước ô)
-            cell_size = 1.0  # Kích thước mỗi ô là 1x1
-            target_size = cell_size * 0.9  # Sử dụng 90% kích thước ô
+            # Mỗi ô có kích thước 1x1 trong coordinate system của matplotlib
+            # Chúng ta muốn ảnh chiếm tối đa 80% kích thước ô
             
-            # Lấy kích thước gốc của ảnh
+            # Lấy kích thước gốc của ảnh (pixels)
             img_height, img_width = self.queen_image.shape[:2]
             
-            # Tính zoom factor dựa trên kích thước lớn nhất (chiều cao hoặc chiều rộng)
-            max_img_dimension = max(img_height, img_width)
-            zoom_factor = target_size / (max_img_dimension / 100)  # Điều chỉnh tỷ lệ
+            # Trong matplotlib, kích thước ảnh được tính theo DPI
+            # Figure size là 10x8 inch, với DPI mặc định 100
+            # Vậy mỗi ô có kích thước khoảng 800/num_queens pixels (chiều cao)
+            pixels_per_cell = 800 / self.num_queens
+
+            # Kích thước mục tiêu cho ảnh (40% kích thước ô thay vì 60%)
+            target_pixels = pixels_per_cell * 0.4
+            
+            # Tính zoom factor: target_size / original_size
+            # Lấy chiều lớn hơn để đảm bảo ảnh không vượt quá ô
+            max_original_dimension = max(img_height, img_width)
+            zoom_factor = target_pixels / max_original_dimension
+            
+            # Giới hạn zoom factor để tránh ảnh quá lớn hoặc quá nhỏ
+            zoom_factor = max(0.05, min(zoom_factor, 1.5))
             
             # Tạo OffsetImage từ ảnh queen với zoom chính xác
             imagebox = OffsetImage(self.queen_image, zoom=zoom_factor)
@@ -106,7 +117,7 @@ class NQueensVisualizer:
                                frameon=False, pad=0, box_alignment=(0.5, 0.5))
             
             # Thêm màu nền nếu cần (để phân biệt các trạng thái khác nhau)
-            if color != 'blue':  # blue là màu mặc định cho quân hậu đã đặt
+            if color != 'blue' and color != 'green':  # Không vẽ vòng tròn cho green vì đã có hình vuông
                 circle = patches.Circle((col + 0.5, self.num_queens - 1 - row + 0.5), 
                                        0.45, facecolor=color, alpha=0.2, edgecolor=color, linewidth=2)
                 self.ax.add_patch(circle)
@@ -129,33 +140,71 @@ class NQueensVisualizer:
     def draw_attacked_positions(self, state):
         """Vẽ các vị trí bị tấn công"""
         attacked = set()
-        position = len(state)
         
         for row, col in enumerate(state):
-            # Tấn công theo cột
+            # Tấn công theo hàng ngang (toàn bộ hàng)
+            for c in range(self.num_queens):
+                if c != col:  # Không đánh dấu vị trí của chính quân hậu
+                    attacked.add((row, c))
+            
+            # Tấn công theo cột dọc (toàn bộ cột)
             for r in range(self.num_queens):
-                if r != row:
+                if r != row:  # Không đánh dấu vị trí của chính quân hậu
                     attacked.add((r, col))
             
-            # Tấn công theo đường chéo
-            for r in range(self.num_queens):
-                if r != row:
-                    dist = r - row
-                    # Đường chéo phải
-                    if 0 <= col + dist < self.num_queens:
-                        attacked.add((r, col + dist))
-                    # Đường chéo trái
-                    if 0 <= col - dist < self.num_queens:
-                        attacked.add((r, col - dist))
+            # Tấn công theo đường chéo chính (top-left to bottom-right)
+            # Đi lên trái
+            r, c = row - 1, col - 1
+            while r >= 0 and c >= 0:
+                attacked.add((r, c))
+                r -= 1
+                c -= 1
+            # Đi xuống phải
+            r, c = row + 1, col + 1
+            while r < self.num_queens and c < self.num_queens:
+                attacked.add((r, c))
+                r += 1
+                c += 1
+            
+            # Tấn công theo đường chéo phụ (top-right to bottom-left)
+            # Đi lên phải
+            r, c = row - 1, col + 1
+            while r >= 0 and c < self.num_queens:
+                attacked.add((r, c))
+                r -= 1
+                c += 1
+            # Đi xuống trái
+            r, c = row + 1, col - 1
+            while r < self.num_queens and c >= 0:
+                attacked.add((r, c))
+                r += 1
+                c -= 1
         
-        # Vẽ các vị trí bị tấn công cho hàng hiện tại
-        if position < self.num_queens:
-            for c in range(self.num_queens):
-                if (position, c) in attacked:
-                    square = patches.Rectangle((c, self.num_queens-1-position), 1, 1, 
-                                             facecolor='red', alpha=0.3, edgecolor='red')
-                    self.ax.add_patch(square)
-                    self.attack_patches.append(square)
+        # Vẽ tất cả các vị trí bị tấn công (trừ vị trí có quân hậu)
+        queen_positions = set((row, col) for row, col in enumerate(state))
+        
+        for attack_row, attack_col in attacked:
+            if (attack_row, attack_col) not in queen_positions:
+                square = patches.Rectangle((attack_col, self.num_queens-1-attack_row), 1, 1, 
+                                         facecolor='red', alpha=0.25, edgecolor='red', linewidth=0.5)
+                self.ax.add_patch(square)
+                self.attack_patches.append(square)
+    
+    def add_color_legend(self):
+        """Thêm chú thích màu sắc"""
+        from matplotlib.patches import Patch
+        
+        # Tạo các patch cho legend
+        legend_elements = [
+            Patch(facecolor='red', alpha=0.25, label='Ô bị tấn công\n(không đi được)'),
+            Patch(facecolor='green', alpha=0.7, label='Quân hậu đang\nthử đặt'),
+            Patch(facecolor='white', edgecolor='black', label='Ô an toàn\n(có thể đặt)')
+        ]
+        
+        # Đặt legend bên ngoài bàn cờ, ở bên phải
+        self.ax.legend(handles=legend_elements, loc='center left', 
+                      bbox_to_anchor=(1.05, 0.5), fontsize=9, 
+                      framealpha=0.9, fancybox=True, shadow=True)
     
     def show_step(self, state, step_type="trying", candidate_col=None, export_step=False):
         """Hiển thị một bước trong thuật toán"""
@@ -170,6 +219,13 @@ class NQueensVisualizer:
         
         # Nếu đang thử đặt quân hậu mới
         if step_type == "trying" and candidate_col is not None and len(state) < self.num_queens:
+            # Vẽ hình vuông xanh lá bao phủ toàn bộ ô (giống như ô màu đỏ)
+            square = patches.Rectangle((candidate_col, self.num_queens-1-len(state)), 1, 1, 
+                                     facecolor='green', alpha=0.25, edgecolor='green', linewidth=0.5)
+            self.ax.add_patch(square)
+            self.queen_patches.append(square)
+            
+            # Vẽ quân hậu lên trên
             self.draw_queen(len(state), candidate_col, 'green')
             title = f'Đang thử đặt quân hậu tại hàng {len(state)}, cột {candidate_col}'
         elif step_type == "backtrack":
@@ -180,6 +236,10 @@ class NQueensVisualizer:
             title = f'Trạng thái hiện tại: {state}'
         
         self.ax.set_title(title, fontsize=12)
+        
+        # Thêm chú thích màu sắc
+        self.add_color_legend()
+        
         plt.draw()
         
         # Export hình ảnh nếu được yêu cầu
